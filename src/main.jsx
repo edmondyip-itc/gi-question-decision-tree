@@ -219,21 +219,85 @@ function layout(nodes, edges, rootId) {
   return { nodes: laid, edges, rootId };
 }
 
+function createAdjacency(edges) {
+  const parentsById = new Map();
+  const childrenById = new Map();
+  for (const edge of edges) {
+    if (!childrenById.has(edge.source)) childrenById.set(edge.source, new Set());
+    if (!parentsById.has(edge.target)) parentsById.set(edge.target, new Set());
+    childrenById.get(edge.source).add(edge.target);
+    parentsById.get(edge.target).add(edge.source);
+  }
+  return { parentsById, childrenById };
+}
+
+function collectAncestors(nodeIds, parentsById) {
+  const visible = new Set(nodeIds);
+  const queue = [...nodeIds];
+  while (queue.length) {
+    const current = queue.pop();
+    const parents = parentsById.get(current);
+    if (!parents) continue;
+    for (const parent of parents) {
+      if (visible.has(parent)) continue;
+      visible.add(parent);
+      queue.push(parent);
+    }
+  }
+  return visible;
+}
+
 function App() {
   const [selectedProduct, setSelectedProduct] = useState(PRODUCT_KEYS[0]);
+  const [productSearch, setProductSearch] = useState('');
   const [search, setSearch] = useState('');
   const rfRef = useRef(null);
   const product = products[selectedProduct];
   const graph = useMemo(() => buildGraph(product), [product]);
-  const filteredNodes = useMemo(() => {
+  const filteredProductKeys = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return PRODUCT_KEYS;
+    return PRODUCT_KEYS.filter(key => {
+      const candidate = products[key];
+      return `${candidate.key} ${candidate.label} ${candidate.title}`.toLowerCase().includes(q);
+    });
+  }, [productSearch]);
+  const adjacency = useMemo(() => createAdjacency(graph.edges), [graph.edges]);
+  const searchState = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return graph.nodes.map(n => ({...n, className: q && (`${n.data.label} ${n.data.key}`.toLowerCase().includes(q)) ? 'match' : ''}));
-  }, [graph.nodes, search]);
+    if (!q) {
+      const allIds = new Set(graph.nodes.map(n => n.id));
+      return { q, matchIds: new Set(), visibleIds: allIds, firstMatchId: null };
+    }
+    const matchIds = new Set();
+    for (const node of graph.nodes) {
+      const haystack = `${node.data.title || ''} ${node.data.label || ''} ${node.id || ''}`.toLowerCase();
+      if (haystack.includes(q)) matchIds.add(node.id);
+    }
+    const visibleIds = collectAncestors(matchIds, adjacency.parentsById);
+    const firstMatchId = graph.nodes.find(n => matchIds.has(n.id))?.id ?? null;
+    return { q, matchIds, visibleIds, firstMatchId };
+  }, [adjacency.parentsById, graph.nodes, search]);
+  const filteredNodes = useMemo(() => {
+    return graph.nodes.map(n => ({
+      ...n,
+      hidden: searchState.q ? !searchState.visibleIds.has(n.id) : false,
+      className: searchState.matchIds.has(n.id) ? 'match' : '',
+    }));
+  }, [graph.nodes, searchState]);
+  const filteredEdges = useMemo(() => {
+    return graph.edges.map(edge => ({
+      ...edge,
+      hidden: searchState.q
+        ? !searchState.visibleIds.has(edge.source) || !searchState.visibleIds.has(edge.target)
+        : false,
+    }));
+  }, [graph.edges, searchState]);
   const [nodes, setNodes, onNodesChange] = useNodesState(filteredNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(graph.edges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(filteredEdges);
   const [active, setActive] = useState(null);
 
-  useEffect(()=>{ setNodes(filteredNodes); setEdges(graph.edges); setActive(null); }, [filteredNodes, graph.edges, setNodes, setEdges]);
+  useEffect(()=>{ setNodes(filteredNodes); setEdges(filteredEdges); setActive(null); }, [filteredNodes, filteredEdges, setNodes, setEdges]);
 
   const focusRoot = useCallback(() => {
     const rf = rfRef.current;
@@ -247,16 +311,46 @@ function App() {
     );
   }, [graph]);
   useEffect(()=>{ setTimeout(focusRoot, 80); }, [focusRoot, selectedProduct]);
+  useEffect(() => {
+    if (!searchState.q || !searchState.firstMatchId) return;
+    const match = graph.nodes.find(n => n.id === searchState.firstMatchId);
+    const rf = rfRef.current;
+    if (!rf || !match) return;
+    const timer = setTimeout(() => {
+      rf.setCenter(
+        match.position.x + (match.data.width || 420) / 2,
+        match.position.y + (match.data.height || 120) / 2,
+        { zoom: 1.15, duration: 450 },
+      );
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [graph.nodes, searchState.firstMatchId, searchState.q]);
 
   return <div className="app">
     <aside className="sidebar">
       <div className="brand">GI Question Decision Tree</div>
-      <label>Product</label>
-      <select value={selectedProduct} onChange={e=>setSelectedProduct(e.target.value)}>
-        {PRODUCT_KEYS.map(k=><option key={k} value={k}>{products[k].label} ({k})</option>)}
-      </select>
-      <label>Search</label>
-      <input placeholder="Search question / answer..." value={search} onChange={e=>setSearch(e.target.value)} />
+      <label>Product Search</label>
+      <input placeholder="Search product..." value={productSearch} onChange={e=>setProductSearch(e.target.value)} />
+      <label>Products</label>
+      <div className="productList" role="listbox" aria-label="Products">
+        {filteredProductKeys.length ? filteredProductKeys.map(key => {
+          const candidate = products[key];
+          return (
+            <button
+              key={key}
+              type="button"
+              className={`productItem ${selectedProduct === key ? 'selected' : ''}`}
+              onClick={() => {
+                setSelectedProduct(key);
+                setProductSearch('');
+              }}
+            >
+              <div className="productItemTitle">{candidate.label}</div>
+              <div className="productItemMeta">{candidate.key}</div>
+            </button>
+          );
+        }) : <div className="productEmpty">No products match your search.</div>}
+      </div>
       {active && <div className="detail">
         <div className="detailTitle">Selected</div>
         <div className="detailType">{active.data.title}</div>
@@ -266,6 +360,9 @@ function App() {
     <main className="canvas">
       <div className="topbar">
         <h1>{product.label} <span>({product.key})</span></h1>
+      </div>
+      <div className="floatingSearch">
+        <input placeholder="Search question / answer..." value={search} onChange={e=>setSearch(e.target.value)} />
       </div>
       <ReactFlow
         nodes={nodes}

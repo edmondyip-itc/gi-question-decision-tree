@@ -13,10 +13,19 @@ select,input { width:100%; border:1px solid #d7deea; border-radius:10px; padding
 .detailType { font-size:18px; font-weight:800; margin:8px 0; }
 .detail code { display:block; white-space:normal; word-break:break-word; background:#f3f6fb; padding:8px; border-radius:8px; color:#44506a; }
 .detail p { line-height:1.55; color:#27344d; }
+.productList { display:flex; flex-direction:column; gap:10px; margin-top:4px; }
+.productItem { text-align:left; width:100%; border:1px solid #d7deea; border-radius:14px; padding:12px 14px; background:#fff; font:inherit; cursor:pointer; transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+.productItem:hover { transform:translateY(-1px); border-color:#b8c6dd; box-shadow:0 10px 22px rgba(18,32,60,.08); }
+.productItem.selected { background:#eef6ff; border-color:#7fb1f7; box-shadow:0 0 0 4px rgba(30,111,255,.12); }
+.productItemTitle { font-weight:800; font-size:14px; line-height:1.35; color:#172033; }
+.productItemMeta { margin-top:4px; font-size:12px; font-weight:700; color:#6a758b; letter-spacing:.02em; text-transform:uppercase; }
+.productEmpty { padding:12px 14px; border:1px dashed #d7deea; border-radius:14px; color:#6a758b; background:#fafcff; font-size:14px; }
 .canvas { position:relative; height:100vh; }
-.topbar { position:absolute; z-index:5; left:22px; top:18px; background:rgba(255,255,255,.92); backdrop-filter: blur(6px); border:1px solid #dfe6f2; border-radius:14px; padding:12px 16px; box-shadow:0 10px 30px rgba(17,24,39,.08); }
+.topbar { position:absolute; z-index:5; left:22px; top:18px; background:rgba(255,255,255,.92); backdrop-filter: blur(6px); border:1px solid #dfe6f2; border-radius:14px; padding:12px 16px; box-shadow:0 10px 30px rgba(17,24,39,.08); display:flex; align-items:center; gap:18px; }
 .topbar h1 { margin:0; font-size:20px; letter-spacing:-.02em; }
 .topbar span { color:#6a758b; font-weight:650; }
+.floatingSearch { position:absolute; z-index:6; top:18px; right:22px; width:min(420px, calc(100vw - 364px)); max-width:420px; }
+.floatingSearch input { width:100%; }
 .react-flow__edge-path { stroke:#8290a8; stroke-width:2.2; }
 .react-flow__edge.edge-yes .react-flow__edge-path { stroke:#12a36d; }
 .react-flow__edge.edge-no .react-flow__edge-path { stroke:#de4b4b; }
